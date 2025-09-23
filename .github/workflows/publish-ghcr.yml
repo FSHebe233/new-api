@@ -19,6 +19,10 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@v4
 
+      - name: Prepare lowercase repo path for GHCR
+        run: |
+          echo "REPO_LC=$(echo '${GITHUB_REPOSITORY}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
       - name: Save version info
         run: |
           echo "${{ inputs.tag }}" > VERSION
@@ -39,5 +43,4 @@ jobs:
           context: .
           platforms: linux/amd64
           push: true
-          tags: ghcr.io/${{ github.repository }}:${{ inputs.tag }}
-
+          tags: ghcr.io/${{ env.REPO_LC }}:${{ inputs.tag }}
