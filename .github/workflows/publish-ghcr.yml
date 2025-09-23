@@ -19,9 +19,12 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@v4
 
-      - name: Prepare lowercase repo path for GHCR
+      - name: Prepare image ref
+        id: prep
         run: |
-          echo "REPO_LC=$(echo '${GITHUB_REPOSITORY}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+          REPO_LC=$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')
+          echo "REPO_LC=$REPO_LC" >> $GITHUB_ENV
+          echo "image_ref=ghcr.io/${REPO_LC}:${{ inputs.tag }}" >> $GITHUB_OUTPUT
 
       - name: Save version info
         run: |
@@ -43,4 +46,4 @@ jobs:
           context: .
           platforms: linux/amd64
           push: true
-          tags: ghcr.io/${{ env.REPO_LC }}:${{ inputs.tag }}
+          tags: ${{ steps.prep.outputs.image_ref }}
