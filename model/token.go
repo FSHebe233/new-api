@@ -11,22 +11,29 @@ import (
 )
 
 type Token struct {
-	Id                 int            `json:"id"`
-	UserId             int            `json:"user_id" gorm:"index"`
-	Key                string         `json:"key" gorm:"type:char(48);uniqueIndex"`
-	Status             int            `json:"status" gorm:"default:1"`
-	Name               string         `json:"name" gorm:"index" `
-	CreatedTime        int64          `json:"created_time" gorm:"bigint"`
-	AccessedTime       int64          `json:"accessed_time" gorm:"bigint"`
-	ExpiredTime        int64          `json:"expired_time" gorm:"bigint;default:-1"` // -1 means never expired
-	RemainQuota        int            `json:"remain_quota" gorm:"default:0"`
-	UnlimitedQuota     bool           `json:"unlimited_quota"`
-	ModelLimitsEnabled bool           `json:"model_limits_enabled"`
-	ModelLimits        string         `json:"model_limits" gorm:"type:varchar(1024);default:''"`
-	AllowIps           *string        `json:"allow_ips" gorm:"default:''"`
-	UsedQuota          int            `json:"used_quota" gorm:"default:0"` // used quota
-	Group              string         `json:"group" gorm:"default:''"`
-	DeletedAt          gorm.DeletedAt `gorm:"index"`
+    Id                 int            `json:"id"`
+    UserId             int            `json:"user_id" gorm:"index"`
+    Key                string         `json:"key" gorm:"type:char(48);uniqueIndex"`
+    Status             int            `json:"status" gorm:"default:1"`
+    Name               string         `json:"name" gorm:"index" `
+    CreatedTime        int64          `json:"created_time" gorm:"bigint"`
+    AccessedTime       int64          `json:"accessed_time" gorm:"bigint"`
+    ExpiredTime        int64          `json:"expired_time" gorm:"bigint;default:-1"` // -1 means never expired
+    RemainQuota        int            `json:"remain_quota" gorm:"default:0"`
+    UnlimitedQuota     bool           `json:"unlimited_quota"`
+    ModelLimitsEnabled bool           `json:"model_limits_enabled"`
+    ModelLimits        string         `json:"model_limits" gorm:"type:varchar(1024);default:''"`
+    AllowIps           *string        `json:"allow_ips" gorm:"default:''"`
+    UsedQuota          int            `json:"used_quota" gorm:"default:0"` // used quota
+    Group              string         `json:"group" gorm:"default:''"`
+    // New fields for start-on-first-use & daily limit
+    StartOnFirstUse   bool           `json:"start_on_first_use" gorm:"default:false"`
+    DurationSeconds   int64          `json:"duration_seconds" gorm:"bigint;default:0"`
+    FirstUsedTime     int64          `json:"first_used_time" gorm:"bigint;default:0"`
+    DailyQuotaLimit   int            `json:"daily_quota_limit" gorm:"default:0"` // 0 means no daily limit
+    DayWindowStart    int64          `json:"day_window_start" gorm:"bigint;default:0"`
+    DayUsedQuota      int            `json:"day_used_quota" gorm:"default:0"`
+    DeletedAt          gorm.DeletedAt `gorm:"index"`
 }
 
 func (token *Token) Clean() {
@@ -173,34 +180,110 @@ func (token *Token) Insert() error {
 
 // Update Make sure your token's fields is completed, because this will update non-zero values
 func (token *Token) Update() (err error) {
-	defer func() {
-		if shouldUpdateRedis(true, err) {
-			gopool.Go(func() {
-				err := cacheSetToken(*token)
-				if err != nil {
-					common.SysLog("failed to update token cache: " + err.Error())
-				}
-			})
-		}
-	}()
-	err = DB.Model(token).Select("name", "status", "expired_time", "remain_quota", "unlimited_quota",
-		"model_limits_enabled", "model_limits", "allow_ips", "group").Updates(token).Error
-	return err
+    defer func() {
+        if shouldUpdateRedis(true, err) {
+            gopool.Go(func() {
+                err := cacheSetToken(*token)
+                if err != nil {
+                    common.SysLog("failed to update token cache: " + err.Error())
+                }
+            })
+        }
+    }()
+    err = DB.Model(token).Select("name", "status", "expired_time", "remain_quota", "unlimited_quota",
+        "model_limits_enabled", "model_limits", "allow_ips", "group",
+        "start_on_first_use", "duration_seconds", "daily_quota_limit").Updates(token).Error
+    return err
 }
 
 func (token *Token) SelectUpdate() (err error) {
-	defer func() {
-		if shouldUpdateRedis(true, err) {
-			gopool.Go(func() {
-				err := cacheSetToken(*token)
-				if err != nil {
-					common.SysLog("failed to update token cache: " + err.Error())
-				}
-			})
-		}
-	}()
-	// This can update zero values
-	return DB.Model(token).Select("accessed_time", "status").Updates(token).Error
+    defer func() {
+        if shouldUpdateRedis(true, err) {
+            gopool.Go(func() {
+                err := cacheSetToken(*token)
+                if err != nil {
+                    common.SysLog("failed to update token cache: " + err.Error())
+                }
+            })
+        }
+    }()
+    // This can update zero values
+    return DB.Model(token).Select("accessed_time", "status").Updates(token).Error
+}
+
+// UpdateOnUseFields updates runtime fields during validation/consumption.
+// Only updates provided fields; safe for concurrent calls.
+func (token *Token) UpdateOnUseFields(fields map[string]interface{}) (err error) {
+    defer func() {
+        if shouldUpdateRedis(true, err) {
+            gopool.Go(func() {
+                // refresh cache with latest token from DB
+                var fresh Token
+                if err2 := DB.First(&fresh, "id = ?", token.Id).Error; err2 == nil {
+                    _ = cacheSetToken(fresh)
+                }
+            })
+        }
+    }()
+    return DB.Model(&Token{}).Where("id = ?", token.Id).Updates(fields).Error
+}
+
+// ResetDailyWindowIfNeeded resets day window and usage when a new 24h window starts.
+// It returns true if any field changed.
+func (token *Token) ResetDailyWindowIfNeeded(now int64) (bool, error) {
+    if token.DailyQuotaLimit <= 0 {
+        return false, nil
+    }
+    start := token.DayWindowStart
+    if start == 0 {
+        // Initialize window start at first use time if exists, else now
+        if token.FirstUsedTime > 0 {
+            start = token.FirstUsedTime
+        } else {
+            start = now
+        }
+        token.DayWindowStart = start
+        token.DayUsedQuota = 0
+        err := token.UpdateOnUseFields(map[string]interface{}{
+            "day_window_start": start,
+            "day_used_quota":   0,
+            "accessed_time":    now,
+        })
+        return true, err
+    }
+    if now >= start+86400 {
+        // Move start forward by whole 24h cycles and reset used to 0
+        cycles := (now - start) / 86400
+        newStart := start + cycles*86400
+        token.DayWindowStart = newStart
+        token.DayUsedQuota = 0
+        err := token.UpdateOnUseFields(map[string]interface{}{
+            "day_window_start": newStart,
+            "day_used_quota":   0,
+            "accessed_time":    now,
+        })
+        return true, err
+    }
+    return false, nil
+}
+
+// AdjustDailyUsed adjusts day_used_quota by delta; if result negative, clamp to 0.
+func AdjustDailyUsed(tokenId int, delta int) error {
+    if delta == 0 {
+        return nil
+    }
+    // Use CASE to clamp at 0 for decreases
+    if delta > 0 {
+        return DB.Model(&Token{}).Where("id = ?", tokenId).Updates(map[string]interface{}{
+            "day_used_quota": gorm.Expr("day_used_quota + ?", delta),
+            "accessed_time":  common.GetTimestamp(),
+        }).Error
+    }
+    d := -delta
+    return DB.Model(&Token{}).Where("id = ?", tokenId).Updates(map[string]interface{}{
+        "day_used_quota": gorm.Expr("CASE WHEN day_used_quota - ? < 0 THEN 0 ELSE day_used_quota - ? END", d, d),
+        "accessed_time":  common.GetTimestamp(),
+    }).Error
 }
 
 func (token *Token) Delete() (err error) {

@@ -86,18 +86,38 @@ func calculateAudioQuota(info QuotaInfo) int {
 }
 
 func PreWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usage *dto.RealtimeUsage) error {
-	if relayInfo.UsePrice {
-		return nil
-	}
-	userQuota, err := model.GetUserQuota(relayInfo.UserId, false)
-	if err != nil {
-		return err
-	}
+    if relayInfo.UsePrice {
+        return nil
+    }
+    userQuota, err := model.GetUserQuota(relayInfo.UserId, false)
+    if err != nil {
+        return err
+    }
 
-	token, err := model.GetTokenByKey(strings.TrimLeft(relayInfo.TokenKey, "sk-"), false)
-	if err != nil {
-		return err
-	}
+    // Always read token from DB to ensure fresh daily fields
+    token, err := model.GetTokenById(relayInfo.TokenId)
+    if err != nil {
+        return err
+    }
+    now := common.GetTimestamp()
+    // Handle start-on-first-use & daily reset
+    if token.StartOnFirstUse {
+        if token.FirstUsedTime == 0 {
+            fields := map[string]interface{}{
+                "first_used_time": now,
+                "accessed_time":   now,
+                "day_window_start": now,
+            }
+            if token.DurationSeconds > 0 {
+                fields["expired_time"] = now + token.DurationSeconds
+                token.ExpiredTime = now + token.DurationSeconds
+            }
+            _ = token.UpdateOnUseFields(fields)
+            token.FirstUsedTime = now
+            token.DayWindowStart = now
+        }
+        _, _ = token.ResetDailyWindowIfNeeded(now)
+    }
 
 	modelName := relayInfo.OriginModelName
 	textInputTokens := usage.InputTokenDetails.TextTokens
@@ -141,11 +161,17 @@ func PreWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usag
 		return fmt.Errorf("user quota is not enough, user quota: %s, need quota: %s", logger.FormatQuota(userQuota), logger.FormatQuota(quota))
 	}
 
-	if !token.UnlimitedQuota && token.RemainQuota < quota {
-		return fmt.Errorf("token quota is not enough, token remain quota: %s, need quota: %s", logger.FormatQuota(token.RemainQuota), logger.FormatQuota(quota))
-	}
+    if !token.UnlimitedQuota && token.RemainQuota < quota {
+        return fmt.Errorf("token quota is not enough, token remain quota: %s, need quota: %s", logger.FormatQuota(token.RemainQuota), logger.FormatQuota(quota))
+    }
+    // Daily limit enforcement (check only, adjustment happens in PostConsumeQuota)
+    if token.DailyQuotaLimit > 0 {
+        if quota > 0 && token.DayUsedQuota+quota > token.DailyQuotaLimit {
+            return fmt.Errorf("令牌今日可用额度不足，今日剩余：%s，需要：%s", logger.FormatQuota(token.DailyQuotaLimit-token.DayUsedQuota), logger.FormatQuota(quota))
+        }
+    }
 
-	err = PostConsumeQuota(relayInfo, quota, 0, false)
+    err = PostConsumeQuota(relayInfo, quota, 0, false)
 	if err != nil {
 		return err
 	}
@@ -464,27 +490,68 @@ func PostAudioConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, u
 }
 
 func PreConsumeTokenQuota(relayInfo *relaycommon.RelayInfo, quota int) error {
-	if quota < 0 {
-		return errors.New("quota 不能为负数！")
-	}
-	if relayInfo.IsPlayground {
-		return nil
-	}
+    if quota < 0 {
+        return errors.New("quota 不能为负数！")
+    }
+    if relayInfo.IsPlayground {
+        return nil
+    }
 	//if relayInfo.TokenUnlimited {
 	//	return nil
 	//}
-	token, err := model.GetTokenByKey(relayInfo.TokenKey, false)
-	if err != nil {
-		return err
-	}
-	if !relayInfo.TokenUnlimited && token.RemainQuota < quota {
-		return fmt.Errorf("token quota is not enough, token remain quota: %s, need quota: %s", logger.FormatQuota(token.RemainQuota), logger.FormatQuota(quota))
-	}
-	err = model.DecreaseTokenQuota(relayInfo.TokenId, relayInfo.TokenKey, quota)
-	if err != nil {
-		return err
-	}
-	return nil
+    // Always read from DB to avoid stale daily fields from cache
+    token, err := model.GetTokenById(relayInfo.TokenId)
+    if err != nil {
+        return err
+    }
+    now := common.GetTimestamp()
+
+    // Start-on-first-use: initialize on first request
+    if token.StartOnFirstUse {
+        if token.FirstUsedTime == 0 {
+            fields := map[string]interface{}{
+                "first_used_time": now,
+                "accessed_time":   now,
+                "day_window_start": now,
+            }
+            if token.DurationSeconds > 0 {
+                fields["expired_time"] = now + token.DurationSeconds
+                token.ExpiredTime = now + token.DurationSeconds
+            }
+            _ = token.UpdateOnUseFields(fields)
+            token.FirstUsedTime = now
+            token.DayWindowStart = now
+        }
+        // reset daily window if needed
+        _, _ = token.ResetDailyWindowIfNeeded(now)
+    }
+
+    // Enforce daily quota limit if configured
+    if token.DailyQuotaLimit > 0 {
+        // Ensure latest values after potential reset
+        if token.DayWindowStart == 0 || now >= token.DayWindowStart+86400 {
+            // Refresh from DB to be safe
+            if t2, e2 := model.GetTokenById(relayInfo.TokenId); e2 == nil {
+                token = t2
+            }
+        }
+        if quota > 0 && token.DayUsedQuota+quota > token.DailyQuotaLimit {
+            return fmt.Errorf("令牌今日可用额度不足，今日剩余：%s，需要：%s", logger.FormatQuota(token.DailyQuotaLimit-token.DayUsedQuota), logger.FormatQuota(quota))
+        }
+        if quota > 0 {
+            if err := model.AdjustDailyUsed(relayInfo.TokenId, quota); err != nil {
+                return err
+            }
+        }
+    }
+    if !relayInfo.TokenUnlimited && token.RemainQuota < quota {
+        return fmt.Errorf("token quota is not enough, token remain quota: %s, need quota: %s", logger.FormatQuota(token.RemainQuota), logger.FormatQuota(quota))
+    }
+    err = model.DecreaseTokenQuota(relayInfo.TokenId, relayInfo.TokenKey, quota)
+    if err != nil {
+        return err
+    }
+    return nil
 }
 
 func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQuota int, sendEmail bool) (err error) {
@@ -498,16 +565,20 @@ func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQu
 		return err
 	}
 
-	if !relayInfo.IsPlayground {
-		if quota > 0 {
-			err = model.DecreaseTokenQuota(relayInfo.TokenId, relayInfo.TokenKey, quota)
-		} else {
-			err = model.IncreaseTokenQuota(relayInfo.TokenId, relayInfo.TokenKey, -quota)
-		}
-		if err != nil {
-			return err
-		}
-	}
+    if !relayInfo.IsPlayground {
+        if quota > 0 {
+            err = model.DecreaseTokenQuota(relayInfo.TokenId, relayInfo.TokenKey, quota)
+        } else {
+            err = model.IncreaseTokenQuota(relayInfo.TokenId, relayInfo.TokenKey, -quota)
+        }
+        if err != nil {
+            return err
+        }
+        // Adjust daily used by delta (may be negative)
+        if err := model.AdjustDailyUsed(relayInfo.TokenId, quota); err != nil {
+            return err
+        }
+    }
 
 	if sendEmail {
 		if (quota + preConsumedQuota) != 0 {

@@ -135,12 +135,12 @@ func GetTokenUsage(c *gin.Context) {
 }
 
 func AddToken(c *gin.Context) {
-	token := model.Token{}
-	err := c.ShouldBindJSON(&token)
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
+    token := model.Token{}
+    err := c.ShouldBindJSON(&token)
+    if err != nil {
+        common.ApiError(c, err)
+        return
+    }
 	if len(token.Name) > 30 {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
@@ -157,21 +157,24 @@ func AddToken(c *gin.Context) {
 		common.SysLog("failed to generate token key: " + err.Error())
 		return
 	}
-	cleanToken := model.Token{
-		UserId:             c.GetInt("id"),
-		Name:               token.Name,
-		Key:                key,
-		CreatedTime:        common.GetTimestamp(),
-		AccessedTime:       common.GetTimestamp(),
-		ExpiredTime:        token.ExpiredTime,
-		RemainQuota:        token.RemainQuota,
-		UnlimitedQuota:     token.UnlimitedQuota,
-		ModelLimitsEnabled: token.ModelLimitsEnabled,
-		ModelLimits:        token.ModelLimits,
-		AllowIps:           token.AllowIps,
-		Group:              token.Group,
-	}
-	err = cleanToken.Insert()
+    cleanToken := model.Token{
+        UserId:             c.GetInt("id"),
+        Name:               token.Name,
+        Key:                key,
+        CreatedTime:        common.GetTimestamp(),
+        AccessedTime:       common.GetTimestamp(),
+        ExpiredTime:        token.ExpiredTime,
+        RemainQuota:        token.RemainQuota,
+        UnlimitedQuota:     token.UnlimitedQuota,
+        ModelLimitsEnabled: token.ModelLimitsEnabled,
+        ModelLimits:        token.ModelLimits,
+        AllowIps:           token.AllowIps,
+        Group:              token.Group,
+        StartOnFirstUse:    token.StartOnFirstUse,
+        DurationSeconds:    token.DurationSeconds,
+        DailyQuotaLimit:    token.DailyQuotaLimit,
+    }
+    err = cleanToken.Insert()
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -235,20 +238,23 @@ func UpdateToken(c *gin.Context) {
 			return
 		}
 	}
-	if statusOnly != "" {
-		cleanToken.Status = token.Status
-	} else {
-		// If you add more fields, please also update token.Update()
-		cleanToken.Name = token.Name
-		cleanToken.ExpiredTime = token.ExpiredTime
-		cleanToken.RemainQuota = token.RemainQuota
-		cleanToken.UnlimitedQuota = token.UnlimitedQuota
-		cleanToken.ModelLimitsEnabled = token.ModelLimitsEnabled
-		cleanToken.ModelLimits = token.ModelLimits
-		cleanToken.AllowIps = token.AllowIps
-		cleanToken.Group = token.Group
-	}
-	err = cleanToken.Update()
+    if statusOnly != "" {
+        cleanToken.Status = token.Status
+    } else {
+        // If you add more fields, please also update token.Update()
+        cleanToken.Name = token.Name
+        cleanToken.ExpiredTime = token.ExpiredTime
+        cleanToken.RemainQuota = token.RemainQuota
+        cleanToken.UnlimitedQuota = token.UnlimitedQuota
+        cleanToken.ModelLimitsEnabled = token.ModelLimitsEnabled
+        cleanToken.ModelLimits = token.ModelLimits
+        cleanToken.AllowIps = token.AllowIps
+        cleanToken.Group = token.Group
+        cleanToken.StartOnFirstUse = token.StartOnFirstUse
+        cleanToken.DurationSeconds = token.DurationSeconds
+        cleanToken.DailyQuotaLimit = token.DailyQuotaLimit
+    }
+    err = cleanToken.Update()
 	if err != nil {
 		common.ApiError(c, err)
 		return
