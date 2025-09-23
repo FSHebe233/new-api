@@ -1,0 +1,58 @@
+name: Build Docker image artifacts
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag to embed in the archive (no registry)"
+        required: false
+        default: "ci-${{ github.sha }}"
+
+jobs:
+  build_and_upload:
+    name: Build single-arch Docker image archives
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Save version info
+        run: |
+          echo "${{ inputs.image_tag }}" > VERSION
+
+      - name: Set up QEMU (for cross build)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build linux/amd64 tar
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64
+          tags: localhost/new-api:amd64-${{ inputs.image_tag }}
+          outputs: type=docker,dest=/tmp/new-api-linux-amd64.tar
+
+      - name: Upload linux/amd64 image tar
+        uses: actions/upload-artifact@v4
+        with:
+          name: new-api-linux-amd64
+          path: /tmp/new-api-linux-amd64.tar
+          if-no-files-found: error
+
+      - name: Build linux/arm64 tar
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/arm64
+          tags: localhost/new-api:arm64-${{ inputs.image_tag }}
+          outputs: type=docker,dest=/tmp/new-api-linux-arm64.tar
+
+      - name: Upload linux/arm64 image tar
+        uses: actions/upload-artifact@v4
+        with:
+          name: new-api-linux-arm64
+          path: /tmp/new-api-linux-arm64.tar
+          if-no-files-found: error
+
