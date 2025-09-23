@@ -27,6 +27,8 @@ import {
   renderQuotaWithPrompt,
   getModelCategories,
   selectFilter,
+  getQuotaWithUnit,
+  renderUnitWithQuota,
 } from '../../../../helpers';
 import { useIsMobile } from '../../../../hooks/common/useIsMobile';
 import {
@@ -41,6 +43,7 @@ import {
   Form,
   Col,
   Row,
+  InputNumber,
 } from '@douyinfe/semi-ui';
 import {
   IconCreditCard,
@@ -63,6 +66,8 @@ const EditTokenModal = (props) => {
   const [models, setModels] = useState([]);
   const [groups, setGroups] = useState([]);
   const isEdit = props.editingToken.id !== undefined;
+  const [useAmount, setUseAmount] = useState(false);
+  const [amountValue, setAmountValue] = useState(0);
 
   const getInitValues = () => ({
     name: '',
@@ -474,28 +479,74 @@ const EditTokenModal = (props) => {
                   </div>
                 </div>
                 <Row gutter={12}>
-                  <Col span={24}>
-                    <Form.AutoComplete
-                      field='remain_quota'
-                      label={t('额度')}
-                      placeholder={t('请输入额度')}
-                      type='number'
-                      disabled={values.unlimited_quota}
-                      extraText={renderQuotaWithPrompt(values.remain_quota)}
-                      rules={
-                        values.unlimited_quota
-                          ? []
-                          : [{ required: true, message: t('请输入额度') }]
-                      }
-                      data={[
-                        { value: 500000, label: '1$' },
-                        { value: 5000000, label: '10$' },
-                        { value: 25000000, label: '50$' },
-                        { value: 50000000, label: '100$' },
-                        { value: 250000000, label: '500$' },
-                        { value: 500000000, label: '1000$' },
-                      ]}
-                    />
+                  <Col span={12}>
+                    {useAmount ? (
+                      <Form.Slot label={t('等价金额')}>
+                        <InputNumber
+                          value={amountValue}
+                          disabled={values.unlimited_quota}
+                          onChange={(v) => {
+                            const val = parseFloat(v) || 0;
+                            setAmountValue(val);
+                            const q = renderUnitWithQuota(val);
+                            formApiRef.current?.setValue('remain_quota', parseInt(q) || 0);
+                          }}
+                          placeholder={t('请输入金额')}
+                          style={{ width: '100%' }}
+                        />
+                      </Form.Slot>
+                    ) : (
+                      <Form.AutoComplete
+                        field='remain_quota'
+                        label={t('额度')}
+                        placeholder={t('请输入额度')}
+                        type='number'
+                        disabled={values.unlimited_quota}
+                        extraText={renderQuotaWithPrompt(values.remain_quota)}
+                        rules={
+                          values.unlimited_quota
+                            ? []
+                            : [{ required: true, message: t('请输入额度') }]
+                        }
+                        data={[
+                          { value: 500000, label: '1$' },
+                          { value: 5000000, label: '10$' },
+                          { value: 25000000, label: '50$' },
+                          { value: 50000000, label: '100$' },
+                          { value: 250000000, label: '500$' },
+                          { value: 500000000, label: '1000$' },
+                        ]}
+                        onChange={(v) => {
+                          const q = parseInt(v) || 0;
+                          try {
+                            const amt = parseFloat(getQuotaWithUnit(q));
+                            if (Number.isFinite(amt)) setAmountValue(amt);
+                          } catch (_) {}
+                        }}
+                      />
+                    )}
+                  </Col>
+                  <Col span={12}>
+                    <Form.Slot label={t('按金额输入')}>
+                      <div className='flex items-center gap-3'>
+                        <Button
+                          type={useAmount ? 'primary' : 'tertiary'}
+                          onClick={() => {
+                            try {
+                              const q = parseInt(
+                                formApiRef.current?.getValue('remain_quota') || 0,
+                              );
+                              const amt = parseFloat(getQuotaWithUnit(q));
+                              if (Number.isFinite(amt)) setAmountValue(amt);
+                            } catch (_) {}
+                            setUseAmount(!useAmount);
+                          }}
+                          size='small'
+                        >
+                          {useAmount ? t('按额度') : t('按金额')}
+                        </Button>
+                      </div>
+                    </Form.Slot>
                   </Col>
                   <Col span={24}>
                     <Form.Switch

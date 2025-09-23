@@ -25,6 +25,8 @@ import {
   showSuccess,
   renderQuota,
   renderQuotaWithPrompt,
+  getQuotaWithUnit,
+  renderUnitWithQuota,
 } from '../../../../helpers';
 import { useIsMobile } from '../../../../hooks/common/useIsMobile';
 import {
@@ -60,6 +62,10 @@ const EditUserModal = (props) => {
   const [loading, setLoading] = useState(true);
   const [addQuotaModalOpen, setIsModalOpen] = useState(false);
   const [addQuotaLocal, setAddQuotaLocal] = useState('');
+  const [quotaInputByAmount, setQuotaInputByAmount] = useState(false);
+  const [quotaAmount, setQuotaAmount] = useState(0);
+  const [addByAmount, setAddByAmount] = useState(false);
+  const [addAmountLocal, setAddAmountLocal] = useState(0);
   const isMobile = useIsMobile();
   const [groupOptions, setGroupOptions] = useState([]);
   const formApiRef = useRef(null);
@@ -99,6 +105,11 @@ const EditUserModal = (props) => {
     if (success) {
       data.password = '';
       formApiRef.current?.setValues({ ...getInitValues(), ...data });
+      try {
+        const q = parseFloat(data.quota || 0);
+        const amt = parseFloat(getQuotaWithUnit(q));
+        if (Number.isFinite(amt)) setQuotaAmount(amt);
+      } catch (_) {}
     } else {
       showError(message);
     }
@@ -285,24 +296,81 @@ const EditUserModal = (props) => {
                         />
                       </Col>
 
-                      <Col span={10}>
-                        <Form.InputNumber
-                          field='quota'
-                          label={t('剩余额度')}
-                          placeholder={t('请输入新的剩余额度')}
-                          step={500000}
-                          extraText={renderQuotaWithPrompt(values.quota || 0)}
-                          rules={[{ required: true, message: t('请输入额度') }]}
-                          style={{ width: '100%' }}
-                        />
+                      <Col span={12}>
+                        {quotaInputByAmount ? (
+                          <div>
+                            <Form.Slot label={t('等价金额')}>
+                              <InputNumber
+                                value={quotaAmount}
+                                onChange={(v) => {
+                                  const val = parseFloat(v) || 0;
+                                  setQuotaAmount(val);
+                                  const q = renderUnitWithQuota(val);
+                                  formApiRef.current?.setValue('quota', parseInt(q) || 0);
+                                }}
+                                placeholder={t('请输入金额')}
+                                style={{ width: '100%' }}
+                              />
+                            </Form.Slot>
+                          </div>
+                        ) : (
+                          <Form.InputNumber
+                            field='quota'
+                            label={t('剩余额度')}
+                            placeholder={t('请输入新的剩余额度')}
+                            step={500000}
+                            extraText={renderQuotaWithPrompt(values.quota || 0)}
+                            rules={[{ required: true, message: t('请输入额度') }]}
+                            style={{ width: '100%' }}
+                            onChange={(v) => {
+                              const q = parseInt(v) || 0;
+                              try {
+                                const amt = parseFloat(getQuotaWithUnit(q));
+                                if (Number.isFinite(amt)) setQuotaAmount(amt);
+                              } catch (_) {}
+                            }}
+                          />
+                        )}
                       </Col>
 
-                      <Col span={14}>
+                      <Col span={12}>
+                        <Form.Slot label={t('按金额输入')}>
+                          <div className='flex items-center gap-3'>
+                            <div className='text-xs text-gray-600'>{t('按金额输入')}</div>
+                            <Input
+                              style={{ display: 'none' }}
+                              aria-hidden
+                            />
+                            <Button
+                              type={quotaInputByAmount ? 'primary' : 'tertiary'}
+                              onClick={() => {
+                                const currentQuota = parseInt(
+                                  formApiRef.current?.getValue('quota') || 0,
+                                );
+                                try {
+                                  const amt = parseFloat(
+                                    getQuotaWithUnit(currentQuota),
+                                  );
+                                  if (Number.isFinite(amt)) setQuotaAmount(amt);
+                                } catch (_) {}
+                                setQuotaInputByAmount(!quotaInputByAmount);
+                              }}
+                              size='small'
+                            >
+                              {quotaInputByAmount ? t('按额度') : t('按金额')}
+                            </Button>
+                          </div>
+                        </Form.Slot>
+                      </Col>
+
+                      <Col span={24}>
                         <Form.Slot label={t('添加额度')}>
-                          <Button
-                            icon={<IconPlus />}
-                            onClick={() => setIsModalOpen(true)}
-                          />
+                          <div className='flex items-center gap-2'>
+                            <Button
+                              icon={<IconPlus />}
+                              onClick={() => setIsModalOpen(true)}
+                            />
+                          </div>
                         </Form.Slot>
                       </Col>
                     </Row>
@@ -385,14 +453,45 @@ const EditUserModal = (props) => {
             );
           })()}
         </div>
-        <InputNumber
-          placeholder={t('需要添加的额度（支持负数）')}
-          value={addQuotaLocal}
-          onChange={setAddQuotaLocal}
-          style={{ width: '100%' }}
-          showClear
-          step={500000}
-        />
+        <div className='flex items-center gap-3 mb-2'>
+          <span className='text-xs text-gray-600'>{t('按金额输入')}</span>
+          <Button
+            type={addByAmount ? 'primary' : 'tertiary'}
+            size='small'
+            onClick={() => {
+              setAddByAmount(!addByAmount);
+              try {
+                const amt = parseFloat(getQuotaWithUnit(parseInt(addQuotaLocal) || 0));
+                if (Number.isFinite(amt)) setAddAmountLocal(amt);
+              } catch (_) {}
+            }}
+          >
+            {addByAmount ? t('按额度') : t('按金额')}
+          </Button>
+        </div>
+        {addByAmount ? (
+          <InputNumber
+            placeholder={t('请输入金额')}
+            value={addAmountLocal}
+            onChange={(v) => {
+              const val = parseFloat(v) || 0;
+              setAddAmountLocal(val);
+              const q = renderUnitWithQuota(val);
+              setAddQuotaLocal(parseInt(q) || 0);
+            }}
+            style={{ width: '100%' }}
+            showClear
+          />
+        ) : (
+          <InputNumber
+            placeholder={t('需要添加的额度（支持负数）')}
+            value={addQuotaLocal}
+            onChange={setAddQuotaLocal}
+            style={{ width: '100%' }}
+            showClear
+            step={500000}
+          />
+        )}
       </Modal>
     </>
   );
