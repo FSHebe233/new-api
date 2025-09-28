@@ -328,6 +328,21 @@ const EditTokenModal = (props) => {
         <Form key={isEdit ? 'edit' : 'new'} initValues={getInitValues()} getFormApi={(api) => (formApiRef.current = api)} onSubmit={submit}>
           {({ values }) => {
             const hideExpiration = values.start_on_first_use && (!values.first_used_time || values.first_used_time === 0);
+            const getPlanDurationText = () => {
+              const d = parseInt(values.duration_days || 0) || 0;
+              const h = parseInt(values.duration_hours || 0) || 0;
+              if (!d && !h) return t('未设置');
+              return `${d}${t('天')}${h ? ` ${h}${t('小时')}` : ''}`;
+            };
+            const getRemainText = () => {
+              if (!values || !values.expired_time || values.expired_time === -1 || hideExpiration) return '';
+              const ms = Date.parse(values.expired_time) - Date.now();
+              if (isNaN(ms)) return '';
+              const sec = Math.max(0, Math.floor(ms / 1000));
+              const days = Math.floor(sec / 86400);
+              const hours = Math.floor((sec % 86400) / 3600);
+              return `${days}${t('天')} ${hours}${t('小时')}`;
+            };
             return (
               <div className='p-2'>
                 {/* 基本信息 */}
@@ -389,6 +404,20 @@ const EditTokenModal = (props) => {
                         </Col>
                       </>
                     )}
+                    {hideExpiration && (
+                      <>
+                        <Col span={24}>
+                          <Form.Slot label={t('过期时间')}>
+                            <span>{t('未启用')}</span>
+                          </Form.Slot>
+                        </Col>
+                        <Col span={24}>
+                          <Form.Slot label={t('计划持续时长')}>
+                            <span>{getPlanDurationText()}</span>
+                          </Form.Slot>
+                        </Col>
+                      </>
+                    )}
 
                     {/* 用后计时/持续时间/每日限额/金额输入 */}
                     <Col span={24}>
@@ -399,7 +428,7 @@ const EditTokenModal = (props) => {
                         extraText={t('开启后将在首次请求时开始计时，可设置可用天数/小时，过期时间自动计算')}
                       />
                     </Col>
-                    {values.start_on_first_use && (
+                    {(values.start_on_first_use || (parseInt(values.daily_quota_limit || 0) > 0)) && (
                       <>
                         <Col xs={12} sm={12}>
                           <Form.InputNumber field='duration_days' label={t('可用天数')} min={0} style={{ width: '100%' }} />
@@ -452,6 +481,13 @@ const EditTokenModal = (props) => {
                           </Form.Slot>
                         </Col>
                       </>
+                    )}
+                    {!hideExpiration && (
+                      <Col span={24}>
+                        <Form.Slot label={t('剩余时长')}>
+                          <span>{getRemainText()}</span>
+                        </Form.Slot>
+                      </Col>
                     )}
 
                     {isEdit && (
