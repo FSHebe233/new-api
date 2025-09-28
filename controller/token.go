@@ -1,65 +1,100 @@
 package controller
 
 import (
-	"net/http"
-	"one-api/common"
-	"one-api/model"
-	"strconv"
-	"strings"
+    "net/http"
+    "one-api/common"
+    "one-api/model"
+    "strconv"
+    "strings"
 
-	"github.com/gin-gonic/gin"
+    "github.com/gin-gonic/gin"
 )
 
+type TokenDTO struct {
+    model.Token
+    ExpiredLabel       string `json:"expired_label"`
+    DisplayExpiredTime int64  `json:"display_expired_time"`
+    DurationDays       int    `json:"duration_days"`
+    DurationHours      int    `json:"duration_hours"`
+}
+
+func buildTokenDTO(t *model.Token) TokenDTO {
+    dto := TokenDTO{Token: *t}
+    if t.DurationSeconds > 0 {
+        dto.DurationDays = int(t.DurationSeconds / 86400)
+        dto.DurationHours = int((t.DurationSeconds % 86400) / 3600)
+    }
+    if t.StartOnFirstUse && t.FirstUsedTime == 0 {
+        dto.ExpiredLabel = "未启用"
+        dto.DisplayExpiredTime = 0
+    } else if t.ExpiredTime == -1 {
+        dto.ExpiredLabel = "永不过期"
+        dto.DisplayExpiredTime = -1
+    } else {
+        dto.DisplayExpiredTime = t.ExpiredTime
+    }
+    return dto
+}
+
 func GetAllTokens(c *gin.Context) {
-	userId := c.GetInt("id")
-	pageInfo := common.GetPageQuery(c)
-	tokens, err := model.GetAllUserTokens(userId, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	total, _ := model.CountUserTokens(userId)
-	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(tokens)
-	common.ApiSuccess(c, pageInfo)
-	return
+    userId := c.GetInt("id")
+    pageInfo := common.GetPageQuery(c)
+    tokens, err := model.GetAllUserTokens(userId, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+    if err != nil {
+        common.ApiError(c, err)
+        return
+    }
+    total, _ := model.CountUserTokens(userId)
+    // decorate with computed fields
+    dtos := make([]TokenDTO, 0, len(tokens))
+    for _, t := range tokens {
+        dtos = append(dtos, buildTokenDTO(t))
+    }
+    pageInfo.SetTotal(int(total))
+    pageInfo.SetItems(dtos)
+    common.ApiSuccess(c, pageInfo)
+    return
 }
 
 func SearchTokens(c *gin.Context) {
-	userId := c.GetInt("id")
-	keyword := c.Query("keyword")
-	token := c.Query("token")
-	tokens, err := model.SearchUserTokens(userId, keyword, token)
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "",
-		"data":    tokens,
-	})
-	return
+    userId := c.GetInt("id")
+    keyword := c.Query("keyword")
+    token := c.Query("token")
+    tokens, err := model.SearchUserTokens(userId, keyword, token)
+    if err != nil {
+        common.ApiError(c, err)
+        return
+    }
+    dtos := make([]TokenDTO, 0, len(tokens))
+    for _, t := range tokens {
+        dtos = append(dtos, buildTokenDTO(t))
+    }
+    c.JSON(http.StatusOK, gin.H{
+        "success": true,
+        "message": "",
+        "data":    dtos,
+    })
+    return
 }
 
 func GetToken(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	userId := c.GetInt("id")
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	token, err := model.GetTokenByIds(id, userId)
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "",
-		"data":    token,
-	})
-	return
+    id, err := strconv.Atoi(c.Param("id"))
+    userId := c.GetInt("id")
+    if err != nil {
+        common.ApiError(c, err)
+        return
+    }
+    token, err := model.GetTokenByIds(id, userId)
+    if err != nil {
+        common.ApiError(c, err)
+        return
+    }
+    c.JSON(http.StatusOK, gin.H{
+        "success": true,
+        "message": "",
+        "data":    buildTokenDTO(token),
+    })
+    return
 }
 
 func GetTokenStatus(c *gin.Context) {
@@ -243,7 +278,22 @@ func UpdateToken(c *gin.Context) {
     } else {
         // If you add more fields, please also update token.Update()
         cleanToken.Name = token.Name
-        cleanToken.ExpiredTime = token.ExpiredTime
+        // Start-on-first-use expiration guard
+        if token.StartOnFirstUse {
+            if cleanToken.FirstUsedTime == 0 {
+                // 未使用，允许 -1（延后至首用再计算）
+                cleanToken.ExpiredTime = token.ExpiredTime
+            } else {
+                // 已使用：若传入 -1 且有有效持续时长，则根据首用时间+持续时长计算，否则沿用传入
+                if token.ExpiredTime == -1 && token.DurationSeconds > 0 {
+                    cleanToken.ExpiredTime = cleanToken.FirstUsedTime + token.DurationSeconds
+                } else {
+                    cleanToken.ExpiredTime = token.ExpiredTime
+                }
+            }
+        } else {
+            cleanToken.ExpiredTime = token.ExpiredTime
+        }
         cleanToken.RemainQuota = token.RemainQuota
         cleanToken.UnlimitedQuota = token.UnlimitedQuota
         cleanToken.ModelLimitsEnabled = token.ModelLimitsEnabled
@@ -262,8 +312,8 @@ func UpdateToken(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
-		"data":    cleanToken,
-	})
+    	"data":    buildTokenDTO(cleanToken),
+    })
 	return
 }
 
