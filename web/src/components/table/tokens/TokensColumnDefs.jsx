@@ -484,6 +484,11 @@ export const getTokensColumns = ({
       title: t('过期时间'),
       dataIndex: 'expired_time',
       render: (text, record, index) => {
+        const startOnFirstUse = !!record.start_on_first_use;
+        const firstUsed = parseInt(record.first_used_time || 0) > 0;
+        if (startOnFirstUse && !firstUsed) {
+          return <div>{t('未启用')}</div>;
+        }
         return (
           <div>
             {record.expired_time === -1 ? t('永不过期') : renderTimestamp(text)}

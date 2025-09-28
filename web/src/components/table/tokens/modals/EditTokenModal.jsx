@@ -207,7 +207,10 @@ const EditTokenModal = (props) => {
       if (local.start_on_first_use) {
         const fus = parseInt(local.first_used_time || 0);
         if (!fus || fus <= 0) {
-          local.expired_time = -1; // 未使用：后端首用再计算过期
+          const hasValidExpired = !!local.expired_time && local.expired_time !== -1;
+          if (!hasValidExpired) {
+            local.expired_time = -1; // 未使用：后端首用再计算过期
+          }
         }
       }
       if (local.expired_time !== -1) {
@@ -254,7 +257,12 @@ const EditTokenModal = (props) => {
         delete local.duration_days;
         delete local.duration_hours;
         local.daily_quota_limit = parseInt(local.daily_quota_limit || 0);
-        if (local.start_on_first_use) local.expired_time = -1;
+        if (local.start_on_first_use) {
+          const hasValidExpired = !!local.expired_time && local.expired_time !== -1;
+          if (!hasValidExpired) {
+            local.expired_time = -1;
+          }
+        }
         if (local.expired_time !== -1) {
           const time = Date.parse(local.expired_time);
           if (isNaN(time)) {
