@@ -1,4 +1,4 @@
-package controller
+﻿package controller
 
 import (
     "net/http"
@@ -25,10 +25,10 @@ func buildTokenDTO(t *model.Token) TokenDTO {
         dto.DurationHours = int((t.DurationSeconds % 86400) / 3600)
     }
     if t.StartOnFirstUse && t.FirstUsedTime == 0 {
-        dto.ExpiredLabel = "未启用"
+        dto.ExpiredLabel = "not_started"
         dto.DisplayExpiredTime = 0
     } else if t.ExpiredTime == -1 {
-        dto.ExpiredLabel = "永不过期"
+        dto.ExpiredLabel = "姘镐笉杩囨湡"
         dto.DisplayExpiredTime = -1
     } else {
         dto.DisplayExpiredTime = t.ExpiredTime
@@ -179,7 +179,7 @@ func AddToken(c *gin.Context) {
 	if len(token.Name) > 30 {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
-			"message": "令牌名称过长",
+			"message": "浠ょ墝鍚嶇О杩囬暱",
 		})
 		return
 	}
@@ -187,7 +187,7 @@ func AddToken(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
-			"message": "生成令牌失败",
+			"message": "鐢熸垚浠ょ墝澶辫触",
 		})
 		common.SysLog("failed to generate token key: " + err.Error())
 		return
@@ -248,7 +248,7 @@ func UpdateToken(c *gin.Context) {
 	if len(token.Name) > 30 {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
-			"message": "令牌名称过长",
+			"message": "浠ょ墝鍚嶇О杩囬暱",
 		})
 		return
 	}
@@ -261,14 +261,14 @@ func UpdateToken(c *gin.Context) {
 		if cleanToken.Status == common.TokenStatusExpired && cleanToken.ExpiredTime <= common.GetTimestamp() && cleanToken.ExpiredTime != -1 {
 			c.JSON(http.StatusOK, gin.H{
 				"success": false,
-				"message": "令牌已过期，无法启用，请先修改令牌过期时间，或者设置为永不过期",
+				"message": "浠ょ墝宸茶繃鏈燂紝鏃犳硶鍚敤锛岃鍏堜慨鏀逛护鐗岃繃鏈熸椂闂达紝鎴栬€呰缃负姘镐笉杩囨湡",
 			})
 			return
 		}
 		if cleanToken.Status == common.TokenStatusExhausted && cleanToken.RemainQuota <= 0 && !cleanToken.UnlimitedQuota {
 			c.JSON(http.StatusOK, gin.H{
 				"success": false,
-				"message": "令牌可用额度已用尽，无法启用，请先修改令牌剩余额度，或者设置为无限额度",
+				"message": "浠ょ墝鍙敤棰濆害宸茬敤灏斤紝鏃犳硶鍚敤锛岃鍏堜慨鏀逛护鐗屽墿浣欓搴︼紝鎴栬€呰缃负鏃犻檺棰濆害",
 			})
 			return
 		}
@@ -281,11 +281,10 @@ func UpdateToken(c *gin.Context) {
         // Start-on-first-use expiration guard
         if token.StartOnFirstUse {
             if cleanToken.FirstUsedTime == 0 {
-                // 未使用，允许 -1（延后至首用再计算）
+                // 鏈娇鐢紝鍏佽 -1锛堝欢鍚庤嚦棣栫敤鍐嶈绠楋級
                 cleanToken.ExpiredTime = token.ExpiredTime
             } else {
-                // 已使用：若传入 -1 且有有效持续时长，则根据首用时间+持续时长计算，否则沿用传入
-                if token.ExpiredTime == -1 && token.DurationSeconds > 0 {
+                // 宸蹭娇鐢細鑻ヤ紶鍏?-1 涓旀湁鏈夋晥鎸佺画鏃堕暱锛屽垯鏍规嵁棣栫敤鏃堕棿+鎸佺画鏃堕暱璁＄畻锛屽惁鍒欐部鐢ㄤ紶鍏?                if token.ExpiredTime == -1 && token.DurationSeconds > 0 {
                     cleanToken.ExpiredTime = cleanToken.FirstUsedTime + token.DurationSeconds
                 } else {
                     cleanToken.ExpiredTime = token.ExpiredTime
@@ -326,7 +325,7 @@ func DeleteTokenBatch(c *gin.Context) {
 	if err := c.ShouldBindJSON(&tokenBatch); err != nil || len(tokenBatch.Ids) == 0 {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
-			"message": "参数错误",
+			"message": "鍙傛暟閿欒",
 		})
 		return
 	}
@@ -342,3 +341,4 @@ func DeleteTokenBatch(c *gin.Context) {
 		"data":    count,
 	})
 }
+
