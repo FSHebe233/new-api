@@ -331,7 +331,8 @@ func UpdateToken(c *gin.Context) {
                 // 鏈娇鐢紝鍏佽 -1锛堝欢鍚庤嚦棣栫敤鍐嶈绠楋級
                 cleanToken.ExpiredTime = token.ExpiredTime
             } else {
-                // 宸蹭娇鐢細鑻ヤ紶鍏?-1 涓旀湁鏈夋晥鎸佺画鏃堕暱锛屽垯鏍规嵁棣栫敤鏃堕棿+鎸佺画鏃堕暱璁＄畻锛屽惁鍒欐部鐢ㄤ紶鍏?                if token.ExpiredTime == -1 && token.DurationSeconds > 0 {
+                // 已使用：若传入 -1 且有有效持续时长，则根据首用时间+持续时长计算，否则沿用传入值
+                if token.ExpiredTime == -1 && token.DurationSeconds > 0 {
                     cleanToken.ExpiredTime = cleanToken.FirstUsedTime + token.DurationSeconds
                 } else {
                     cleanToken.ExpiredTime = token.ExpiredTime
@@ -388,6 +389,8 @@ func DeleteTokenBatch(c *gin.Context) {
 		"data":    count,
 	})
 }
+
+
 
 
 
