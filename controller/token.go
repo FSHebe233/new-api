@@ -12,30 +12,77 @@ import (
 
 type TokenDTO struct {
     model.Token
-    ExpiredLabel       string `json:"expired_label"`
-    DisplayExpiredTime int64  `json:"display_expired_time"`
-    DurationDays       int    `json:"duration_days"`
-    DurationHours      int    `json:"duration_hours"`
+    ExpiredState        string `json:"expired_state"`
+    DisplayExpiredTime  int64  `json:"display_expired_time"`
+    DurationDays        int    `json:"duration_days"`
+    DurationHours       int    `json:"duration_hours"`
+    IsStarted           bool   `json:"is_started"`
+    IsNeverExpire       bool   `json:"is_never_expire"`
+    RemainingSeconds    int64  `json:"remaining_seconds"`
+    PlanDurationSeconds int64  `json:"plan_duration_seconds"`
+    DailyWindowStart    int64  `json:"daily_window_start"`
+    DailyResetAt        int64  `json:"daily_reset_at"`
+    DailyUsedQuota      int    `json:"daily_used_quota"`
+    DailyRemainQuota    int    `json:"daily_remain_quota"`
 }
 
 func buildTokenDTO(t *model.Token) TokenDTO {
     dto := TokenDTO{Token: *t}
+    // duration breakdown
     if t.DurationSeconds > 0 {
         dto.DurationDays = int(t.DurationSeconds / 86400)
         dto.DurationHours = int((t.DurationSeconds % 86400) / 3600)
     }
+    now := common.GetTimestamp()
+    // expired state & display time
     if t.StartOnFirstUse && t.FirstUsedTime == 0 {
-        dto.ExpiredLabel = "not_started"
+        dto.ExpiredState = "not_started"
         dto.DisplayExpiredTime = 0
+        dto.IsStarted = false
+        dto.IsNeverExpire = false
+        dto.RemainingSeconds = 0
     } else if t.ExpiredTime == -1 {
-        dto.ExpiredLabel = "姘镐笉杩囨湡"
+        dto.ExpiredState = "never"
         dto.DisplayExpiredTime = -1
+        dto.IsStarted = true
+        dto.IsNeverExpire = true
+        dto.RemainingSeconds = -1
     } else {
+        dto.ExpiredState = "timed"
         dto.DisplayExpiredTime = t.ExpiredTime
+        dto.IsStarted = true
+        dto.IsNeverExpire = false
+        if t.ExpiredTime > 0 {
+            rem := t.ExpiredTime - now
+            if rem < 0 {
+                rem = 0
+            }
+            dto.RemainingSeconds = rem
+        }
+    }
+    dto.PlanDurationSeconds = t.DurationSeconds
+    // daily window display
+    if t.DailyQuotaLimit > 0 {
+        start := t.DayWindowStart
+        if start == 0 && t.FirstUsedTime > 0 {
+            start = t.FirstUsedTime
+        }
+        dto.DailyWindowStart = start
+        if start > 0 {
+            dto.DailyResetAt = start + 86400
+        }
+        used := t.DayUsedQuota
+        if used < 0 {
+            used = 0
+        }
+        if used > t.DailyQuotaLimit {
+            used = t.DailyQuotaLimit
+        }
+        dto.DailyUsedQuota = used
+        dto.DailyRemainQuota = t.DailyQuotaLimit - used
     }
     return dto
 }
-
 func GetAllTokens(c *gin.Context) {
     userId := c.GetInt("id")
     pageInfo := common.GetPageQuery(c)
@@ -341,4 +388,7 @@ func DeleteTokenBatch(c *gin.Context) {
 		"data":    count,
 	})
 }
+
+
+
 
