@@ -1,4 +1,4 @@
-/*
+﻿/*
 Copyright (C) 2025 QuantumNous
 
 This program is free software: you can redistribute it and/or modify
@@ -65,19 +65,19 @@ const renderStatus = (text, record, t) => {
   const enabled = text === 1;
 
   let tagColor = 'black';
-  let tagText = t('未知状态');
+  let tagText = t('鏈煡鐘舵€?);
   if (enabled) {
     tagColor = 'green';
-    tagText = t('已启用');
+    tagText = t('宸插惎鐢?);
   } else if (text === 2) {
     tagColor = 'red';
-    tagText = t('已禁用');
+    tagText = t('宸茬鐢?);
   } else if (text === 3) {
     tagColor = 'yellow';
-    tagText = t('已过期');
+    tagText = t('宸茶繃鏈?);
   } else if (text === 4) {
     tagColor = 'grey';
-    tagText = t('已耗尽');
+    tagText = t('宸茶€楀敖');
   }
 
   return (
@@ -93,13 +93,13 @@ const renderGroupColumn = (text, t) => {
     return (
       <Tooltip
         content={t(
-          '当前分组为 auto，会自动选择最优分组，当一个组不可用时自动降级到下一个组（熔断机制）',
+          '褰撳墠鍒嗙粍涓?auto锛屼細鑷姩閫夋嫨鏈€浼樺垎缁勶紝褰撲竴涓粍涓嶅彲鐢ㄦ椂鑷姩闄嶇骇鍒颁笅涓€涓粍锛堢啍鏂満鍒讹級',
         )}
         position='top'
       >
         <Tag color='white' shape='circle'>
           {' '}
-          {t('智能熔断')}{' '}
+          {t('鏅鸿兘鐔旀柇')}{' '}
         </Tag>
       </Tooltip>
     );
@@ -196,7 +196,7 @@ const renderModelLimits = (text, record, t) => {
           showArrow
         >
           <Avatar size='extra-extra-small' alt='unknown'>
-            {t('其他')}
+            {t('鍏朵粬')}
           </Avatar>
         </Tooltip>,
       );
@@ -206,7 +206,7 @@ const renderModelLimits = (text, record, t) => {
   } else {
     return (
       <Tag color='white' shape='circle'>
-        {t('无限制')}
+        {t('鏃犻檺鍒?)}
       </Tag>
     );
   }
@@ -217,7 +217,7 @@ const renderAllowIps = (text, t) => {
   if (!text || text.trim() === '') {
     return (
       <Tag color='white' shape='circle'>
-        {t('无限制')}
+        {t('鏃犻檺鍒?)}
       </Tag>
     );
   }
@@ -262,14 +262,14 @@ const renderQuotaUsage = (text, record, t) => {
     const popoverContent = (
       <div className='text-xs p-2'>
         <Paragraph copyable={{ content: renderQuota(used) }}>
-          {t('已用额度')}: {renderQuota(used)}
+          {t('宸茬敤棰濆害')}: {renderQuota(used)}
         </Paragraph>
       </div>
     );
     return (
       <Popover content={popoverContent} position='top'>
         <Tag color='white' shape='circle'>
-          {t('无限额度')}
+          {t('鏃犻檺棰濆害')}
         </Tag>
       </Popover>
     );
@@ -278,13 +278,13 @@ const renderQuotaUsage = (text, record, t) => {
   const popoverContent = (
     <div className='text-xs p-2'>
       <Paragraph copyable={{ content: renderQuota(used) }}>
-        {t('已用额度')}: {renderQuota(used)}
+        {t('宸茬敤棰濆害')}: {renderQuota(used)}
       </Paragraph>
       <Paragraph copyable={{ content: renderQuota(remain) }}>
-        {t('剩余额度')}: {renderQuota(remain)} ({percent.toFixed(0)}%)
+        {t('鍓╀綑棰濆害')}: {renderQuota(remain)} ({percent.toFixed(0)}%)
       </Paragraph>
       <Paragraph copyable={{ content: renderQuota(total) }}>
-        {t('总额度')}: {renderQuota(total)}
+        {t('鎬婚搴?)}: {renderQuota(total)}
       </Paragraph>
     </div>
   );
@@ -336,28 +336,28 @@ const renderOperations = (
       }
     }
   } catch (_) {
-    showError(t('聊天链接配置错误，请联系管理员'));
+    showError(t('鑱婂ぉ閾炬帴閰嶇疆閿欒锛岃鑱旂郴绠＄悊鍛?));
   }
 
   return (
     <Space wrap>
       <SplitButtonGroup
         className='overflow-hidden'
-        aria-label={t('项目操作按钮组')}
+        aria-label={t('椤圭洰鎿嶄綔鎸夐挳缁?)}
       >
         <Button
           size='small'
           type='tertiary'
           onClick={() => {
             if (chatsArray.length === 0) {
-              showError(t('请联系管理员配置聊天链接'));
+              showError(t('璇疯仈绯荤鐞嗗憳閰嶇疆鑱婂ぉ閾炬帴'));
             } else {
               const first = chatsArray[0];
               onOpenLink(first.name, first.value, record);
             }
           }}
         >
-          {t('聊天')}
+          {t('鑱婂ぉ')}
         </Button>
         <Dropdown trigger='click' position='bottomRight' menu={chatsArray}>
           <Button
@@ -377,7 +377,7 @@ const renderOperations = (
             await refresh();
           }}
         >
-          {t('禁用')}
+          {t('绂佺敤')}
         </Button>
       ) : (
         <Button
@@ -387,7 +387,7 @@ const renderOperations = (
             await refresh();
           }}
         >
-          {t('启用')}
+          {t('鍚敤')}
         </Button>
       )}
 
@@ -399,7 +399,7 @@ const renderOperations = (
           setShowEdit(true);
         }}
       >
-        {t('编辑')}
+        {t('缂栬緫')}
       </Button>
 
       <Button
@@ -407,8 +407,8 @@ const renderOperations = (
         size='small'
         onClick={() => {
           Modal.confirm({
-            title: t('确定是否要删除此令牌？'),
-            content: t('此修改将不可逆'),
+            title: t('纭畾鏄惁瑕佸垹闄ゆ浠ょ墝锛?),
+            content: t('姝や慨鏀瑰皢涓嶅彲閫?),
             onOk: () => {
               (async () => {
                 await manageToken(record.id, 'delete', record);
@@ -418,7 +418,7 @@ const renderOperations = (
           });
         }}
       >
-        {t('删除')}
+        {t('鍒犻櫎')}
       </Button>
     </Space>
   );
@@ -437,64 +437,64 @@ export const getTokensColumns = ({
 }) => {
   return [
     {
-      title: t('名称'),
+      title: t('鍚嶇О'),
       dataIndex: 'name',
     },
     {
-      title: t('状态'),
+      title: t('鐘舵€?),
       dataIndex: 'status',
       key: 'status',
       render: (text, record) => renderStatus(text, record, t),
     },
     {
-      title: t('剩余额度/总额度'),
+      title: t('鍓╀綑棰濆害/鎬婚搴?),
       key: 'quota_usage',
       render: (text, record) => renderQuotaUsage(text, record, t),
     },
     {
-      title: t('分组'),
+      title: t('鍒嗙粍'),
       dataIndex: 'group',
       key: 'group',
       render: (text) => renderGroupColumn(text, t),
     },
     {
-      title: t('密钥'),
+      title: t('瀵嗛挜'),
       key: 'token_key',
       render: (text, record) =>
         renderTokenKey(text, record, showKeys, setShowKeys, copyText),
     },
     {
-      title: t('可用模型'),
+      title: t('鍙敤妯″瀷'),
       dataIndex: 'model_limits',
       render: (text, record) => renderModelLimits(text, record, t),
     },
     {
-      title: t('IP限制'),
+      title: t('IP闄愬埗'),
       dataIndex: 'allow_ips',
       render: (text) => renderAllowIps(text, t),
     },
     {
-      title: t('创建时间'),
+      title: t('鍒涘缓鏃堕棿'),
       dataIndex: 'created_time',
       render: (text, record, index) => {
         return <div>{renderTimestamp(text)}</div>;
       },
     },
     {
+    {
       title: t('过期时间'),
-      dataIndex: 'expired_time',
-      render: (text, record, index) => {
-        const startOnFirstUse = !!record.start_on_first_use;
-        const firstUsed = parseInt(record.first_used_time || 0) > 0;
-        if (startOnFirstUse && !firstUsed) {
+      dataIndex: 'display_expired_time',
+      render: (text, record) => {
+        if (record.expired_state === 'not_started') {
           return <div>{t('未启用')}</div>;
         }
-        return (
-          <div>
-            {record.expired_time === -1 ? t('永不过期') : renderTimestamp(text)}
-          </div>
-        );
+        if (record.display_expired_time === -1 || record.expired_state === 'never') {
+          return <div>{t('永不过期')}</div>;
+        }
+        const ts = record.display_expired_time ?? record.expired_time;
+        return <div>{renderTimestamp(ts)}</div>;
       },
+    },
     },
     {
       title: '',
