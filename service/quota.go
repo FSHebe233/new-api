@@ -14,7 +14,6 @@ import (
 	"one-api/setting/ratio_setting"
 	"one-api/setting/system_setting"
 	"one-api/types"
-	"strings"
 	"time"
 
 	"github.com/bytedance/gopkg/util/gopool"
